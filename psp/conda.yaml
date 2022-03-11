@@ -2,10 +2,12 @@ name: mlflow-env
 channels:
   - defaults
 dependencies:
-  - python=3.7.3
+  - python=3.8.12
   - pip:
-    - scikit-learn==0.21.3
-    - mlflow
+    - scikit-learn==1.0.2
+    - mlflow==1.24.0
     - cloudpickle==1.2.2
     - google-cloud-storage
+    - boto3==1.21.17
+    - psycopg2-binary==2.9.3
 
