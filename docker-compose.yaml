@@ -1,11 +1,80 @@
-version: '3.1'
+version: '3.3'
 
 services:
-  mlflow-server:
-    build:
-      context: mlflow-server
-      dockerfile: Dockerfile
-    image:
-      mlflow:1.4.0
+  db:
+    restart: always
+    image: postgres:latest
+    container_name: mlflow_db
+    expose:
+      - 5432
+    networks:
+      - backend
+    environment:
+      - MUID=$UID
+      - MGID=$GID
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PW}
+    volumes:
+      - pg_db_data:/var/lib/postgresql/data
     ports:
-    - "1234:1234"
+      - "${DB_PORT}:5432"
+
+  mlflow-server:
+    restart: always
+    build:
+      context: ./docker-file/mlflow-server
+      dockerfile: Dockerfile
+    expose:
+      - 5001
+    container_name: mlflow_server
+    image: mlflow_server:1.0.0
+    networks:
+      - frontend
+      - backend
+    volumes:
+      - mlrun_data:/mlruns
+    environment:
+      - BACKEND=postgresql://${DB_USER}:${DB_PW}@db:5432/${DB_NAME}
+      - ARTIFACTS=/mlruns
+      # For artifact store in AWS S3 (note boto was installed in container):
+      # - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      # - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      # - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      # - ARTIFACTS="s3://mlflow_bucket/mlflow/"
+    command:
+      - sh    # (sh allows for var substitution of BACKEND and ARTIFACTS)
+      - -c
+      - mlflow server 
+        --port 5001
+        --host 0.0.0.0 
+        --backend-store-uri $${BACKEND} 
+        --default-artifact-root $${ARTIFACTS}
+    depends_on:
+      - db
+#    ports:
+#      - "5001:5001"
+
+  nginx:
+    restart: always
+    build:
+      context: ./docker-file/nginx
+      dockerfile: Dockerfile
+    image: mlflow_nginx
+    container_name: mlflow_nginx
+    ports:
+      - "${MLFLOW_PORT}:80"
+    networks:
+      - frontend
+    depends_on:
+      - mlflow-server
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+
+volumes:
+  pg_db_data:
+  mlrun_data:
